@@ -31,7 +31,17 @@
 #
 #   JID messages are sent *to* (if not set, defaults to the same jid as above):
 #     /set plugins.var.python.highlightxmpp.to myid@jabber.org
+#
+#######
+#
+#   The command:
+#     /hl will toggle the "enable" status on/off
+#   Initial setting is off
+#
+#######
 
+
+import re
 import sys
 import weechat as w
 import sleekxmpp
@@ -54,6 +64,7 @@ settings = {
     'jid': '',
     'password': '',
     'to': '',
+    'enable': 'off',
 }
 
 class SendMsgBot(sleekxmpp.ClientXMPP):
@@ -72,18 +83,45 @@ class SendMsgBot(sleekxmpp.ClientXMPP):
         self.disconnect(wait=True)
 
 
-def send_xmpp(data, signal, message, trial=1):
+def send_xmpp_hook(data, signal, message, trial=1):
+    w.hook_process('func:send_xmpp', 10000, 'send_xmpp_cb',
+                   message)
+    return w.WEECHAT_RC_OK
+
+
+def send_xmpp_cb(data, command, return_code, out, err):
+    if return_code == w.WEECHAT_HOOK_PROCESS_ERROR:
+        w.prnt("", "Error with command '%s'" % command)
+        return w.WEECHAT_RC_OK
+    return w.WEECHAT_RC_OK
+
+
+def send_xmpp(message):
+    if w.config_get_plugin('enable') != 'on':
+        return
     jid = w.config_get_plugin('jid')
     jid_to = w.config_get_plugin('to')
     if not jid_to:
         jid_to = jid
     password = w.config_get_plugin('password')
+    if re.search('sec.*data', password):
+        password=w.string_eval_expression(password, {}, {}, {})
 
     xmpp = SendMsgBot(jid, password, jid_to, message)
     if not xmpp.connect():
-        w.prnt('', "Unable to connect to XMPP server.")
-        return w.WEECHAT_RC_OK
+        w.prnt('', 'Unable to connect to XMPP server.')
+        return
     xmpp.process(block=True)
+    return
+
+
+def toggle_cb(data, buf, args):
+    if w.config_get_plugin('enable') == 'on':
+        w.config_set_plugin('enable', 'off')
+    else:
+        w.config_set_plugin('enable', 'on')
+    w.prnt(buf, 'highlightxmpp status set to %s' % \
+           w.config_get_plugin('enable'))
     return w.WEECHAT_RC_OK
 
 
@@ -94,5 +132,7 @@ if w.register(*info):
         if not w.config_is_set_plugin(setting):
             w.config_set_plugin(setting, settings[setting])
     # and finally our hooks
-    w.hook_signal('weechat_highlight', 'send_xmpp', '')
-    w.hook_signal('weechat_pv', 'send_xmpp', '')
+    w.hook_signal('weechat_highlight', 'send_xmpp_hook', '')
+    w.hook_signal('weechat_pv', 'send_xmpp_hook', '')
+    w.hook_command('hl', 'toggle on/off status of highlightxmpp',
+                   '', '', '', 'toggle_cb', '')
