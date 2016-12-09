@@ -225,13 +225,13 @@ def send_xmpp_cb(data, command, return_code, out, err):
 
 
 def send_xmpp(message):
-    if w.config_string(w.config_get_plugin('enable')) != 'on':
+    if w.config_get_plugin('enable') != 'on':
         return
     jid = w.config_get_plugin('jid')
     jid_to = w.config_get_plugin('to')
     if not jid_to:
         jid_to = jid
-    password = w.config_string(w.config_get_plugin('password'))
+    password = w.config_get_plugin('password')
     if re.search('sec.*data', password):
         password=w.string_eval_expression(password, {}, {}, {})
 
